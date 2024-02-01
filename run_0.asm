@@ -129,7 +129,7 @@ sbrc TMP_2,SREG_C ; if carry flag is set
 ldi LED_STATE,0x01 ; then set initial value
 ; Write name 2
 sbrc NAME_ENABLED,0x00
-rcall WRITE_NAME_2
+rcall TRANSMIT_NAME_2
 TIM0_CMP_EXIT:
 reti
 
@@ -154,7 +154,7 @@ in UART_RECEIVED_CHAR,UDR
 cpi UART_RECEIVED_CHAR,'Y'; compare received character with'Y'
 in TMP_2,SREG
 sbrc TMP_2,SREG_Z ; if zero flag is set (char is 'Y')
-rcall WRITE_NAME_1 ; then write name
+rcall TRANSMIT_NAME_1 ; then write name
 ; if char is 'P'
 cpi UART_RECEIVED_CHAR,'P'; compare received character with'P'
 in TMP_2,SREG
@@ -177,70 +177,33 @@ cp BTN1_CNTR,TMP_1 ; if counter is zero
 breq BTN_WRITE_NAME_1_EXIT ; then exit
 dec BTN1_CNTR ; decrement button counter
 brne BTN_WRITE_NAME_1_EXIT ; if counter is not zero then exit
-rcall WRITE_NAME_1
+rcall TRANSMIT_NAME_1
 BTN_WRITE_NAME_1_EXIT:
 ret
 
-WRITE_NAME_1:
-;Raspopov - 52 61 73 70 6f 70 6f 76
-;space - 20
-;crlf - 0D 0A
-ldi TMP_2,0x52
-rcall USART_TRANSMIT
-ldi TMP_2,0x61
-rcall USART_TRANSMIT
-ldi TMP_2,0x73
-rcall USART_TRANSMIT
-ldi TMP_2,0x70
-rcall USART_TRANSMIT
-ldi TMP_2,0x6f
-rcall USART_TRANSMIT
-ldi TMP_2,0x70
-rcall USART_TRANSMIT
-ldi TMP_2,0x6f
-rcall USART_TRANSMIT
-ldi TMP_2,0x76
-rcall USART_TRANSMIT
-ldi TMP_2,0x20
-rcall USART_TRANSMIT
-mov TMP_2,LED_STATE
-rcall USART_TRANSMIT
-ldi TMP_2,0x0d
-rcall USART_TRANSMIT
-ldi TMP_2,0x0a
-rcall USART_TRANSMIT
+TRANSMIT_NAME_1:
+ldi	ZL,LOW(2*NAME_1)		; load Z pointer with
+ldi	ZH,HIGH(2*NAME_1)		; string address
+rcall TRANSMIT				; transmit string
 ret
 
-WRITE_NAME_2:
-;Plyashenko - 50 6C 79 61 73 68 65 6E 6B 6F
-;space - 20
-;crlf - 0D 0A
-ldi TMP_2,0x50
-rcall USART_TRANSMIT
-ldi TMP_2,0x6c
-rcall USART_TRANSMIT
-ldi TMP_2,0x79
-rcall USART_TRANSMIT
-ldi TMP_2,0x61
-rcall USART_TRANSMIT
-ldi TMP_2,0x73
-rcall USART_TRANSMIT
-ldi TMP_2,0x68
-rcall USART_TRANSMIT
-ldi TMP_2,0x65
-rcall USART_TRANSMIT
-ldi TMP_2,0x6e
-rcall USART_TRANSMIT
-ldi TMP_2,0x6b
-rcall USART_TRANSMIT
-ldi TMP_2,0x6f
-rcall USART_TRANSMIT
-ldi TMP_2,0x20
-rcall USART_TRANSMIT
-mov TMP_2,LED_STATE
-rcall USART_TRANSMIT
-ldi TMP_2,0x0d
-rcall USART_TRANSMIT
-ldi TMP_2,0x0a
-rcall USART_TRANSMIT
+TRANSMIT_NAME_2:
+ldi	ZL,LOW(2*NAME_2)		; load Z pointer with
+ldi	ZH,HIGH(2*NAME_2)		; string address
+rcall TRANSMIT				; transmit string
 ret
+
+TRANSMIT:	
+lpm	TMP_2,Z+ ; load character from pmem
+cpi	TMP_2,$00 ; check if null
+breq TRANSMIT_END ; branch if null
+TRANSMIT_WAIT:
+sbis UCSRA,UDRE
+rjmp TRANSMIT_WAIT ; Wait for empty transmit buffer
+out	UDR,TMP_2 ; transmit character
+rjmp TRANSMIT ; repeat loop
+TRANSMIT_END:
+ret
+
+NAME_1:	.db	"Raspopov",0x0d,0x0a,$00
+NAME_2:	.db	"Plyashenko",0x0d,0x0a,$00
