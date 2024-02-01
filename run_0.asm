@@ -1,13 +1,13 @@
 .include "m8515def.inc"
 .def TMP_1 =r16 ; Temp var 1
-.def TMP_2 =r19 ; Temp var 2
-.def DELAY_1 =r17 ; Delay variable 1
-.def DELAY_2 =r18 ; Delay variable 2
-.def LED_DISABLED = r20 ; LED disabled flag
-.def LED_STATE = r21 ; State of LEDs
-.def BTN0_CNTR = r22 ; 0 button counter
-.def BTN1_CNTR = r23 ; 1 button counter
-.def TC0_CMP_CNTR = r24 ; timer 0 compare counter
+.def TMP_2 =r17 ; Temp var 2
+.def LED_DISABLED = r18 ; LED disabled flag
+.def LED_STATE = r19 ; State of LEDs
+.def BTN0_CNTR = r20 ; 0 button counter
+.def BTN1_CNTR = r21 ; 1 button counter
+.def BTN2_CNTR = r22 ; 2 button counter
+.def TC0_CMP_CNTR = r23 ; timer 0 compare counter
+.def NAME_ENABLED = r24 ; periodical name output flag
 
 .equ F_CPU = 4000000 ; clk0 frequency
 .equ BAUD_RATE = 19200 ; target bitrate
@@ -72,18 +72,34 @@ sbis PINC,PINC1
 rcall BTN_WRITE_NAME_1
 sbic PINC,PINC1
 ldi BTN1_CNTR,BTN_CNTR
+; btn2 enables name periodical name output
+sbis PINC,PINC2
+rcall WRITE_NAME_2_TOGGLE
+sbic PINC,PINC2
+ldi BTN2_CNTR,BTN_CNTR
 rjmp LOOP ;
 
 LED_TOGGLE:
 clr TMP_1
 cp BTN0_CNTR,TMP_1 ; if counter is zero
 breq LED_TOGGLE_EXIT ; then exit
-dec BTN0_CNTR ; decrement BTN0 counter
+dec BTN0_CNTR ; decrement button counter
 brne LED_TOGGLE_EXIT ; if counter is not zero then exit
 ser TMP_1
 eor LED_DISABLED,TMP_1 ; else toggle LED
 ldi LED_STATE,0x01 ; set initial value
 LED_TOGGLE_EXIT:
+ret
+
+WRITE_NAME_2_TOGGLE:
+clr TMP_1
+cp BTN2_CNTR,TMP_1 ; if counter is zero
+breq WRITE_NAME_2_TOGGLE_EXIT ; then exit
+dec BTN2_CNTR ; decrement button counter
+brne WRITE_NAME_2_TOGGLE_EXIT ; if counter is not zero then exit
+ldi TMP_1,0x01
+eor NAME_ENABLED,TMP_1 ; else toggle flag
+WRITE_NAME_2_TOGGLE_EXIT:
 ret
 
 ;***** Timer/Counter 0
@@ -102,6 +118,7 @@ TIM0_CMP:
 dec TC0_CMP_CNTR ; decrement timer 0 counter
 brne TIM0_CMP_EXIT ; if counter is not zero then exit
 ldi TC0_CMP_CNTR,TC0_CMP_INIT ; else reset counter
+; Update LEDs
 mov TMP_2,LED_STATE
 or TMP_2,LED_DISABLED ; Apply LED disable mask
 out PORTB,TMP_2 ; Update LEDS
@@ -109,6 +126,9 @@ lsl LED_STATE ; shift LED state
 in TMP_2,SREG
 sbrc TMP_2,SREG_C ; if carry flag is set
 ldi LED_STATE,0x01 ; then set initial value
+; Write name 2
+sbrc NAME_ENABLED,0x00
+rcall WRITE_NAME_2
 TIM0_CMP_EXIT:
 reti
 
@@ -145,7 +165,7 @@ BTN_WRITE_NAME_1:
 clr TMP_1
 cp BTN1_CNTR,TMP_1 ; if counter is zero
 breq BTN_WRITE_NAME_1_EXIT ; then exit
-dec BTN1_CNTR ; decrement BTN0 counter
+dec BTN1_CNTR ; decrement button counter
 brne BTN_WRITE_NAME_1_EXIT ; if counter is not zero then exit
 rcall WRITE_NAME_1
 BTN_WRITE_NAME_1_EXIT:
@@ -170,6 +190,40 @@ rcall USART_TRANSMIT
 ldi TMP_2,0x6f
 rcall USART_TRANSMIT
 ldi TMP_2,0x76
+rcall USART_TRANSMIT
+ldi TMP_2,0x20
+rcall USART_TRANSMIT
+mov TMP_2,LED_STATE
+rcall USART_TRANSMIT
+ldi TMP_2,0x0d
+rcall USART_TRANSMIT
+ldi TMP_2,0x0a
+rcall USART_TRANSMIT
+ret
+
+WRITE_NAME_2:
+;Plyashenko - 50 6C 79 61 73 68 65 6E 6B 6F
+;space - 20
+;crlf - 0D 0A
+ldi TMP_2,0x50
+rcall USART_TRANSMIT
+ldi TMP_2,0x6c
+rcall USART_TRANSMIT
+ldi TMP_2,0x79
+rcall USART_TRANSMIT
+ldi TMP_2,0x61
+rcall USART_TRANSMIT
+ldi TMP_2,0x73
+rcall USART_TRANSMIT
+ldi TMP_2,0x68
+rcall USART_TRANSMIT
+ldi TMP_2,0x65
+rcall USART_TRANSMIT
+ldi TMP_2,0x6e
+rcall USART_TRANSMIT
+ldi TMP_2,0x6b
+rcall USART_TRANSMIT
+ldi TMP_2,0x6f
 rcall USART_TRANSMIT
 ldi TMP_2,0x20
 rcall USART_TRANSMIT
