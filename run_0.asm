@@ -6,11 +6,20 @@
 .def LED_DISABLED = r20 ; LED disabled flag
 .def LED_STATE = r21 ; State of LEDs
 .def BTN0_CNTR = r22 ; 0 button counter
+.def BTN1_CNTR = r23 ; 1 button counter
+.def TC0_CMP_CNTR = r24 ; timer 0 compare counter
 
 .equ F_CPU = 4000000 ; clk0 frequency
 .equ BAUD_RATE = 19200 ; target bitrate
 .equ UBRR = F_CPU/(16*BAUD_RATE)-1
 .equ BTN_CNTR = 0xff ; initial value for button counter
+
+; timer/counter 0 settings
+; 4 MHz / 1024 => 0,256 msec
+; 500 msec = 0,256 msec * 243 * 8
+.equ TC0_SCALE = (1<<CS02)|(1<<CS00) ; prescale 1024
+.equ TC0_OCR = 0xf3 ; 243 - compare counter value
+.equ TC0_CMP_INIT = 0x08 ; 8 times by TC0_OCR
 
 ;***** Initialization
 .org $000 rjmp RESET ; Reset Handler
@@ -20,14 +29,14 @@
 .org $004 reti ; Timer1 Compare A Handler
 .org $005 reti ; Timer1 Compare B Handler
 .org $006 reti ; Timer1 Overflow Handler
-.org $007 rjmp TIM0_OVF ; Timer0 Overflow Handler
+.org $007 reti ; Timer0 Overflow Handler
 .org $008 reti ; SPI Transfer Complete Handler
 .org $009 rjmp USART_RXC ; USART RX Complete Handler
 .org $00a reti ; UDR0 Empty Handler
 .org $00b rjmp USART_TXC ; USART TX Complete Handler
 .org $00c reti ; Analog Comparator Handler
 .org $00d reti ; IRQ2 Handler
-.org $00e reti ; Timer0 Compare Handler
+.org $00e rjmp TIM0_CMP ; Timer0 Compare Handler
 .org $00f reti ; EEPROM Ready Handler
 .org $010 reti ; Store Program memory Ready Handler
 
@@ -44,6 +53,7 @@ rcall USART_INIT
 ; init variables
 ldi LED_DISABLED,0xff ; all disabled
 ldi BTN0_CNTR,BTN_CNTR
+ldi TC0_CMP_CNTR,TC0_CMP_INIT
 
 ser r16
 out DDRB,r16 ; Set PORTB to output
@@ -52,10 +62,16 @@ out PORTB,LED_DISABLED ; initial state of LEDs
 sei ; enable global interrupts
 
 LOOP:
+; btn0 enables LEDs
 sbis PINC,PINC0 ; if pind0 button pressed
 rcall LED_TOGGLE ; decrement BTN0 counter
 sbic PINC,PINC0 ; if pind0 button released
 ldi BTN0_CNTR,BTN_CNTR ; reset button counter
+; btn1 writes name
+sbis PINC,PINC1
+rcall BTN_WRITE_NAME_1
+sbic PINC,PINC1
+ldi BTN1_CNTR,BTN_CNTR
 rjmp LOOP ;
 
 LED_TOGGLE:
@@ -72,23 +88,28 @@ ret
 
 ;***** Timer/Counter 0
 TIM0_INIT:
-clr r16
-out TCNT0,r16
-ldi r16,(1<<CS02)|(1<<CS00) ; frequency clk0/1024
-out TCCR0,r16 ; set timer control register
-ldi r16,(1<<TOIE0) ; enable timer overflow interrupt
-out TIMSK,r16 ; set timer interrupt mask
+clr TMP_1
+out TCNT0,TMP_1
+ldi TMP_1,(1<<WGM01)|TC0_SCALE ; CTC mode, prescaler 1024
+out TCCR0,TMP_1 ; set timer control register
+ldi TMP_1,TC0_OCR 
+out OCR0,TMP_1
+ldi TMP_1,(1<<OCIE0) ; enable timer compare interrupt
+out TIMSK,TMP_1 ; set timer interrupt mask
 ret
 
-TIM0_OVF:
-;rcall WRITE_NAME_1
+TIM0_CMP:
+dec TC0_CMP_CNTR ; decrement timer 0 counter
+brne TIM0_CMP_EXIT ; if counter is not zero then exit
+ldi TC0_CMP_CNTR,TC0_CMP_INIT ; else reset counter
 mov TMP_2,LED_STATE
-or TMP_2,LED_DISABLED ; Apply disable mask
+or TMP_2,LED_DISABLED ; Apply LED disable mask
 out PORTB,TMP_2 ; Update LEDS
 lsl LED_STATE ; shift LED state
 in TMP_2,SREG
 sbrc TMP_2,SREG_C ; if carry flag is set
 ldi LED_STATE,0x01 ; then set initial value
+TIM0_CMP_EXIT:
 reti
 
 ;***** USART
@@ -118,6 +139,16 @@ sbis UCSRA,UDRE
 rjmp USART_TRANSMIT
 ; Put data into buffer, sends the data
 out UDR,TMP_2
+ret
+
+BTN_WRITE_NAME_1:
+clr TMP_1
+cp BTN1_CNTR,TMP_1 ; if counter is zero
+breq BTN_WRITE_NAME_1_EXIT ; then exit
+dec BTN1_CNTR ; decrement BTN0 counter
+brne BTN_WRITE_NAME_1_EXIT ; if counter is not zero then exit
+rcall WRITE_NAME_1
+BTN_WRITE_NAME_1_EXIT:
 ret
 
 WRITE_NAME_1:
