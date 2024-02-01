@@ -34,7 +34,7 @@
 .org $008 reti ; SPI Transfer Complete Handler
 .org $009 rjmp USART_RXC ; USART RX Complete Handler
 .org $00a reti ; UDR0 Empty Handler
-.org $00b rjmp USART_TXC ; USART TX Complete Handler
+.org $00b reti ; USART TX Complete Handler
 .org $00c reti ; Analog Comparator Handler
 .org $00d reti ; IRQ2 Handler
 .org $00e rjmp TIM0_CMP ; Timer0 Compare Handler
@@ -141,7 +141,7 @@ out UBRRL,TMP_1
 ldi TMP_1,HIGH(UBRR)
 out UBRRH,TMP_1
 ; Enable receiver and transmitter
-ldi TMP_1, (1<<RXCIE)|(1<<TXCIE)|(1<<RXEN)|(1<<TXEN)
+ldi TMP_1, (1<<RXCIE)|(1<<RXEN)|(1<<TXEN)
 out UCSRB,TMP_1
 ; Set frame format: 8data, 1stop bit
 ldi TMP_1, (1<<URSEL)|(3<<UCSZ0)
@@ -161,9 +161,6 @@ in TMP_2,SREG
 ldi TMP_1,0x01
 sbrc TMP_2,SREG_Z ; if zero flag is set (char is 'P')
 eor NAME_ENABLED,TMP_1 ; then toggle name flag
-reti
-
-USART_TXC:
 reti
 
 USART_TRANSMIT:
