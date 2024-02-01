@@ -8,6 +8,7 @@
 .def BTN2_CNTR = r22 ; 2 button counter
 .def TC0_CMP_CNTR = r23 ; timer 0 compare counter
 .def NAME_ENABLED = r24 ; periodical name output flag
+.def UART_RECEIVED_CHAR = r25 ; periodical name output flag
 
 .equ F_CPU = 4000000 ; clk0 frequency
 .equ BAUD_RATE = 19200 ; target bitrate
@@ -148,6 +149,18 @@ out UCSRC,TMP_1
 ret
 
 USART_RXC:
+in UART_RECEIVED_CHAR,UDR
+; if char is 'Y'
+cpi UART_RECEIVED_CHAR,'Y'; compare received character with'Y'
+in TMP_2,SREG
+sbrc TMP_2,SREG_Z ; if zero flag is set (char is 'Y')
+rcall WRITE_NAME_1 ; then write name
+; if char is 'P'
+cpi UART_RECEIVED_CHAR,'P'; compare received character with'P'
+in TMP_2,SREG
+ldi TMP_1,0x01
+sbrc TMP_2,SREG_Z ; if zero flag is set (char is 'P')
+eor NAME_ENABLED,TMP_1 ; then toggle name flag
 reti
 
 USART_TXC:
