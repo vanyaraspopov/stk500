@@ -10,17 +10,21 @@
 .def NAME_ENABLED = r24 ; periodical name output flag
 .def UART_RECEIVED_CHAR = r25 ; periodical name output flag
 
-.equ F_CPU = 4000000 ; clk0 frequency
+.equ F_CPU = 3686000 ; clk0 frequency
 .equ BAUD_RATE = 19200 ; target bitrate
-.equ UBRR = F_CPU/(16*BAUD_RATE)-1
+.equ UBRR = 0x17 ; F_CPU/(16*BAUD_RATE)-1
 .equ BTN_CNTR = 0xff ; initial value for button counter
 
 ; timer/counter 0 settings
-; 4 MHz / 1024 => 0,256 msec
-; 500 msec = 0,256 msec * 243 * 8
+; 3,686 MHz / 1024 => 0,2778 msec
+; 540 ms = 0,2778 msec * 24 * 8
+; 3200 ms = 0,2778 msec * 144 * 80
+; 1 MHz / 1024 = 1,024 msec
+; 2949 ms = 1,024 ms * 144 * 20
+; 501 ms = 1,024 ms * 98 * 5
 .equ TC0_SCALE = (1<<CS02)|(1<<CS00) ; prescale 1024
-.equ TC0_OCR = 0xf3 ; 243 - compare counter value
-.equ TC0_CMP_INIT = 0x08 ; 8 times by TC0_OCR
+.equ TC0_OCR = 0x90 ; 0x90 - 144 0xf3 ; 0x18 ; 24 - compare counter value
+.equ TC0_CMP_INIT = 0x50 ; 0x14 - 20 0x50 ; 0x50 - 80 0x08 ; times by TC0_OCR
 
 ;***** Initialization
 .org $000 rjmp RESET ; Reset Handler
@@ -104,7 +108,7 @@ WRITE_NAME_2_TOGGLE_EXIT:
 ret
 
 ;***** Timer/Counter 0
-TIM0_INIT:
+TIM0_INIT: 
 clr TMP_1
 out TCNT0,TMP_1
 ldi TMP_1,(1<<WGM01)|TC0_SCALE ; CTC mode, prescaler 1024
@@ -129,7 +133,7 @@ sbrc TMP_2,SREG_C ; if carry flag is set
 ldi LED_STATE,0x01 ; then set initial value
 ; Write name 2
 sbrc NAME_ENABLED,0x00
-rcall TRANSMIT_NAME_2
+rcall WRITE_NAME_2
 TIM0_CMP_EXIT:
 reti
 
@@ -154,7 +158,7 @@ in UART_RECEIVED_CHAR,UDR
 cpi UART_RECEIVED_CHAR,'Y'; compare received character with'Y'
 in TMP_2,SREG
 sbrc TMP_2,SREG_Z ; if zero flag is set (char is 'Y')
-rcall TRANSMIT_NAME_1 ; then write name
+rcall WRITE_NAME_1 ; then write name
 ; if char is 'P'
 cpi UART_RECEIVED_CHAR,'P'; compare received character with'P'
 in TMP_2,SREG
@@ -177,33 +181,66 @@ cp BTN1_CNTR,TMP_1 ; if counter is zero
 breq BTN_WRITE_NAME_1_EXIT ; then exit
 dec BTN1_CNTR ; decrement button counter
 brne BTN_WRITE_NAME_1_EXIT ; if counter is not zero then exit
-rcall TRANSMIT_NAME_1
+rcall WRITE_NAME_1
 BTN_WRITE_NAME_1_EXIT:
 ret
 
-TRANSMIT_NAME_1:
-ldi	ZL,LOW(2*NAME_1)		; load Z pointer with
-ldi	ZH,HIGH(2*NAME_1)		; string address
-rcall TRANSMIT				; transmit string
+WRITE_NAME_1:
+;Raspopov - 52 61 73 70 6f 70 6f 76
+;space - 20
+;crlf - 0D 0A
+ldi TMP_2,0x52
+rcall USART_TRANSMIT
+ldi TMP_2,0x61
+rcall USART_TRANSMIT
+ldi TMP_2,0x73
+rcall USART_TRANSMIT
+ldi TMP_2,0x70
+rcall USART_TRANSMIT
+ldi TMP_2,0x6f
+rcall USART_TRANSMIT
+ldi TMP_2,0x70
+rcall USART_TRANSMIT
+ldi TMP_2,0x6f
+rcall USART_TRANSMIT
+ldi TMP_2,0x76
+rcall USART_TRANSMIT
+ldi TMP_2,0x20
+rcall USART_TRANSMIT
+mov TMP_2,LED_STATE
+rcall USART_TRANSMIT
+ldi TMP_2,0x0d
+rcall USART_TRANSMIT
+ldi TMP_2,0x0a
+rcall USART_TRANSMIT
 ret
 
-TRANSMIT_NAME_2:
-ldi	ZL,LOW(2*NAME_2)		; load Z pointer with
-ldi	ZH,HIGH(2*NAME_2)		; string address
-rcall TRANSMIT				; transmit string
+WRITE_NAME_2:
+;Plyashenko - 50 6C 79 61 73 68 65 6E 6B 6F
+;space - 20
+;crlf - 0D 0A
+ldi TMP_2,0x50
+rcall USART_TRANSMIT
+ldi TMP_2,0x6C
+rcall USART_TRANSMIT
+ldi TMP_2,0x79
+rcall USART_TRANSMIT
+ldi TMP_2,0x61
+rcall USART_TRANSMIT
+ldi TMP_2,0x73
+rcall USART_TRANSMIT
+ldi TMP_2,0x68
+rcall USART_TRANSMIT
+ldi TMP_2,0x65
+rcall USART_TRANSMIT
+ldi TMP_2,0x6E
+rcall USART_TRANSMIT
+ldi TMP_2,0x6B
+rcall USART_TRANSMIT
+ldi TMP_2,0x6F
+rcall USART_TRANSMIT
+ldi TMP_2,0x0d
+rcall USART_TRANSMIT
+ldi TMP_2,0x0a
+rcall USART_TRANSMIT
 ret
-
-TRANSMIT:	
-lpm	TMP_2,Z+ ; load character from pmem
-cpi	TMP_2,$00 ; check if null
-breq TRANSMIT_END ; branch if null
-TRANSMIT_WAIT:
-sbis UCSRA,UDRE
-rjmp TRANSMIT_WAIT ; Wait for empty transmit buffer
-out	UDR,TMP_2 ; transmit character
-rjmp TRANSMIT ; repeat loop
-TRANSMIT_END:
-ret
-
-NAME_1:	.db	"Raspopov",0x0d,0x0a,$00
-NAME_2:	.db	"Plyashenko",0x0d,0x0a,$00
